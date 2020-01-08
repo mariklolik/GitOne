@@ -1,0 +1,1 @@
+python -m pygame.examples.eventlist
