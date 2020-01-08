@@ -1,1 +1,2 @@
-запускать нужно main_MAIN.py остальное напишу здесь потом
+https://github.com/mariklolik/GitOne
+запускать нужно main_MAIN.py
