@@ -6,11 +6,13 @@ from random import choice
 
 pygame.init()
 pygame.joystick.init()
+flag_joy = 1
 try:
     joy = pygame.joystick.Joystick(0)
     joy.init()
     print("Enabled joystick: {0}".format(joy.get_name()))
 except pygame.error:
+    flag_joy = 0
     print("no joystick")
 
 FPS = 50
@@ -46,8 +48,10 @@ def start_screen():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
-            elif event.type in [pygame.JOYAXISMOTION, pygame.JOYHATMOTION, pygame.JOYBUTTONDOWN, pygame.JOYBALLMOTION]:
+            elif flag_joy and event.type in [pygame.JOYAXISMOTION, pygame.JOYHATMOTION, pygame.JOYBUTTONDOWN, pygame.JOYBALLMOTION]:
                 return  # начинаем игру
+            elif event.type == pygame.KEYDOWN and not flag_joy:
+                return
         pygame.display.flip()
         clock.tick(FPS)
 
@@ -151,22 +155,29 @@ class Hero(pygame.sprite.Sprite):
             self.image = load_image("shield.png", -1)
             self.image = pygame.transform.scale(self.image, (150, 150))
             flag_shield = True
-        elif way:
+        elif way and not flag_shield:
             if way == "shoot":
                 self.image = load_image("shoot.png", -1)
                 self.image = pygame.transform.scale(self.image, (150, 150))
                 x, xw, y = self.rect.x, self.rect.x + self.rect.w, self.rect.y
-            else:
-                if way > 0:
-                    self.cur_frame = (self.cur_frame + 1) % len(self.right)
-                    self.image = pygame.transform.scale(self.right[self.cur_frame], (150, 150))
-                    self.rect.x += way * 10
-                elif way < 0:
-                    self.cur_frame = (self.cur_frame + 1) % len(self.left)
-                    self.image = pygame.transform.scale(self.left[self.cur_frame], (150, 150))
-                    self.rect.x += way * 10
-                if self.counter % 30 == 0:
-                    self.counter = 0
+            elif not flag_shield:
+                if not pygame.sprite.spritecollideany(self, vertical_borders):
+                    if way > 0:
+                        self.cur_frame = (self.cur_frame + 1) % len(self.right)
+                        self.image = pygame.transform.scale(self.right[self.cur_frame], (150, 150))
+                        self.rect.x += way * 10
+                    elif way < 0:
+                        self.cur_frame = (self.cur_frame + 1) % len(self.left)
+                        self.image = pygame.transform.scale(self.left[self.cur_frame], (150, 150))
+                        self.rect.x += way * 10
+                    if self.counter % 30 == 0:
+                        self.counter = 0
+                else:
+                    if self.rect.x + self.rect.w <= width:
+                        self.rect.x += 1
+                    elif self.rect.x - self.rect.w >= 0:
+                        self.rect.x -= 1
+
 
 
 class AnimatedBall(pygame.sprite.Sprite):
@@ -224,9 +235,9 @@ class Bullet(pygame.sprite.Sprite):
     def __init__(self, x, y, type):
         super().__init__(all_bullets)
         if type == "r":
-            image = load_image("ball2.png", -1)
+            image = load_image("ball3.png", -1)
         else:
-            image = load_image("ball1.png", -1)
+            image = load_image("ball4.png", -1)
         image = pygame.transform.scale(image, (60, 60))
         self.image = image
         self.rect = self.image.get_rect()
@@ -276,37 +287,80 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        if flag_joy:
+            if event.type == pygame.JOYHATMOTION:
+                if event.value in [(-1, 0), (1, 0)]:
+                    flag_move = 1
+                    way = event.value[0]
+                elif event.value == (0, 0):
+                    flag_move = 0
 
-        if event.type == pygame.JOYHATMOTION:
-            if event.value in [(-1, 0), (1, 0)]:
-                flag_move = 1
-                way = event.value[0]
-            elif event.value == (0, 0):
-                flag_move = 0
+            if event.type == pygame.JOYAXISMOTION and not flag_shield:
+                if event.axis == 2:
+                    if event.value <= -0.97:
+                        all_sprites.update("shoot")
+                        flag_shoot = 1
+                    if event.value >= 0.97:
+                        all_sprites.update("shoot")
+                        flag_shoot = 2
 
-        if event.type == pygame.JOYAXISMOTION:
-            if event.axis == 2:
-                if event.value <= -0.97:
+            if event.type == pygame.JOYBUTTONDOWN:
+                if event.button == 0:
+                    flag_shield = 1
+
+            if event.type == pygame.JOYBUTTONUP:
+                if event.button == 0:
+                    flag_shield = 0
+                if event.button == 2 and score - 300 >= 0:
+                    score -= 300
+                    for i in all_balls:
+                        i.kill()
+                    AnimatedBall(load_image("ball.png", -1), 3, 3, 30, 30, 2)
+                    AnimatedBall(load_image("ball.png", -1), 3, 3, 40, 40, 2)
+                    AnimatedBall(load_image("ball.png", -1), 3, 3, 50, 50, 2)
+        else:
+            if event.type == pygame.KEYDOWN:
+                if event.key == 32:
+                    flag_shield = 1
+
+                if event.key == 97:
+                    flag_move = not flag_move
+                    way = -1
+
+                if event.key == 100:
+                    flag_move = 1
+                    way = 1
+
+                if event.key == 304 and score - 300 >= 0:
+                    score -= 300
+                    for i in all_balls:
+                        i.kill()
+                    AnimatedBall(load_image("ball.png", -1), 3, 3, 30, 30, 2)
+                    AnimatedBall(load_image("ball.png", -1), 3, 3, 40, 40, 2)
+                    AnimatedBall(load_image("ball.png", -1), 3, 3, 50, 50, 2)
+
+
+            if event.type == pygame.KEYUP:
+                if event.key == 97:
+                    flag_move = 0
+                    all_sprites.update("shield_up")
+
+                if event.key == 100:
+                    flag_move = 0
+
+                if event.key == 32:
+                    flag_shield = 0
+
+            if event.type == pygame.MOUSEBUTTONDOWN and not flag_shield:
+
+                if event.button == 3:
                     all_sprites.update("shoot")
                     flag_shoot = 1
-                if event.value >= 0.97:
+
+                if event.button == 1:
                     all_sprites.update("shoot")
                     flag_shoot = 2
 
-        if event.type == pygame.JOYBUTTONDOWN:
-            if event.button == 0:
-                flag_shield = 1
-
-        if event.type == pygame.JOYBUTTONUP:
-            if event.button == 0:
-                flag_shield = 0
-            if event.button == 2 and score >= 200:
-                score -= 300
-                for i in all_balls:
-                    i.kill()
-                AnimatedBall(load_image("ball.png", -1), 3, 3, 30, 30, 2)
-                AnimatedBall(load_image("ball.png", -1), 3, 3, 40, 40, 2)
-                AnimatedBall(load_image("ball.png", -1), 3, 3, 50, 50, 2)
     if flag_move:
         all_sprites.update(way)
     if flag_shield:
