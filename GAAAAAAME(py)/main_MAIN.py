@@ -22,36 +22,73 @@ running = True
 clock = pygame.time.Clock()
 screen.fill((255, 255, 255))
 
+pygame.mixer.music.load(os.path.join('data', 'fight.ogg'))
+pygame.mixer.music.set_volume(0.6)
+pygame.mixer.music.play(-1)
+
+shield_sound = pygame.mixer.Sound(os.path.join('data', 'magicshield.ogg'))
+kill_balls_sound = pygame.mixer.Sound(os.path.join('data', 'heal.ogg'))
+
+font_name = os.path.join('data', 'font.ttf')
+font = pygame.font.Font(font_name, 20)
+t_x = 0.2 * width
+t_y1 = 0.2 * height
+t_y2 = 0.3 * height
+
 
 def terminate():
     pygame.quit()
     sys.exit()
 
 
-def start_screen():
-    intro_text = ["Press any key to continue -->"]
+def draw_text(sc, balls):
+    text1 = font.render(f"Current score: {sc}", 1, (100, 255, 100))
+    text2 = font.render(f"Next kill will summon: {balls}", 1, (100, 255, 100))
+    screen.blit(text1, (t_x, t_y1))
+    screen.blit(text2, (t_x, t_y2))
+
+
+def start_screen(end=False):
     font_name = os.path.join('data', 'font.ttf')
-    fon = pygame.transform.scale(load_image('fon.png'), (width, height))
-    screen.blit(fon, (0, 0))
     font = pygame.font.Font(font_name, 30)
-    text_coord = 50
-    for line in intro_text:
-        string_rendered = font.render(line, 1, pygame.Color('black'))
-        intro_rect = string_rendered.get_rect()
-        text_coord += 10
-        intro_rect.top = text_coord
-        intro_rect.x = 10
-        text_coord += intro_rect.height
-        screen.blit(string_rendered, (0.1 * width, height - 100))
+    if not end:
+        text = font.render("Press any key to continue -->", 1, (0, 0, 0))
+        fon = pygame.transform.scale(load_image('fon.png'), (width, height))
+        screen.blit(fon, (0, 0))
+        screen.blit(text, (width // 2, height // 2))
+    else:
+        global score
+        pygame.mixer.music.load(os.path.join('data', 'gameover.ogg'))
+        pygame.mixer.music.play(-1)
+        cur_score = open("score.txt", "r")
+        current = cur_score.read()
+        cur_score.close()
+        if int(current) < score:
+            current = score
+        cur_score = open("score.txt", "w")
+        cur_score.write(str(current))
+        cur_score.close()
+        text = font.render(f"Your score: {score}", 1, (100, 255, 100))
+        text1 = font.render(f"Best score: {current}", 1, (100, 255, 100))
+        fon = pygame.transform.scale(load_image('gameover.jpg'), (width, height))
+        screen.blit(fon, (0, 0))
+        screen.blit(text, (width * 0.1, height // 2))
+        screen.blit(text1, (width * 0.6, height // 2))
 
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
-            elif flag_joy and event.type in [pygame.JOYAXISMOTION, pygame.JOYHATMOTION, pygame.JOYBUTTONDOWN, pygame.JOYBALLMOTION]:
+            elif flag_joy and event.type in [pygame.JOYAXISMOTION, pygame.JOYHATMOTION, pygame.JOYBUTTONDOWN,
+                                             pygame.JOYBALLMOTION] and not end:
                 return  # начинаем игру
-            elif event.type == pygame.KEYDOWN and not flag_joy:
+            elif event.type == pygame.KEYDOWN and not flag_joy and not end:
                 return
+            elif end:
+                if event.type == pygame.MOUSEBUTTONDOWN and not flag_joy:
+                    return
+                elif flag_joy and event.type == pygame.JOYBUTTONDOWN:
+                    return
         pygame.display.flip()
         clock.tick(FPS)
 
@@ -94,11 +131,13 @@ class Border(pygame.sprite.Sprite):
 
 
 class Back(pygame.sprite.Sprite):
+    image = load_image("cyberpunk_back.png")
+    image = pygame.transform.scale(image, (width, height))
     image1 = load_image("industrial_back.jpg")
     image1 = pygame.transform.scale(image1, (width, height))
     image2 = load_image("forest_back.png")
     image2 = pygame.transform.scale(image2, (width, height))
-    image = choice([image1, image2])
+    image = choice([image, image1, image2])
 
     def __init__(self, group):
         # НЕОБХОДИМО вызвать конструктор родительского класса Sprite. Это очень важно!!!
@@ -140,12 +179,13 @@ class Hero(pygame.sprite.Sprite):
                         frame_location, self.rect.size)))
 
     def update(self, way=False):
-        global x, xw, y, flag_shield
+        global x, xw, y, flag_shield, flag_dead
         self.left = self.frames[:9]
         self.right = self.frames[18:27]
         self.counter += 1
         if pygame.sprite.spritecollideany(self, all_balls) and not flag_shield:
-            if self.counter % 8 == 0:
+            flag_dead = True
+            if self.counter % 2 == 0:
                 self.cur_frame = (self.cur_frame + 1) % len(self.dead)
                 self.image = pygame.transform.scale(self.dead[self.cur_frame], (150, 150))
                 self.flag_end += 1
@@ -177,7 +217,6 @@ class Hero(pygame.sprite.Sprite):
                         self.rect.x += 1
                     elif self.rect.x - self.rect.w >= 0:
                         self.rect.x -= 1
-
 
 
 class AnimatedBall(pygame.sprite.Sprite):
@@ -212,6 +251,7 @@ class AnimatedBall(pygame.sprite.Sprite):
             self.counter = 0
         self.rect = self.rect.move(self.vx, self.vy)
         if pygame.sprite.spritecollideany(self, all_sprites) and flag_shield:
+            shield_sound.play()
             self.rect.y -= 5
             self.rect.x += 5
             self.vy = -self.vy - 1
@@ -282,103 +322,116 @@ way = 0
 start_screen()
 # Enemy(randint(0, width), randint(0, 0.3 * height))
 AnimatedBall(load_image("ball.png", -1), 3, 3, 30, 30, 2)
+counter = 0
+flag_dead = 0
+end = 0
 
 while running:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        if flag_joy:
-            if event.type == pygame.JOYHATMOTION:
-                if event.value in [(-1, 0), (1, 0)]:
-                    flag_move = 1
-                    way = event.value[0]
-                elif event.value == (0, 0):
-                    flag_move = 0
+    if not flag_dead:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if flag_joy:
+                if event.type == pygame.JOYHATMOTION:
+                    if event.value in [(-1, 0), (1, 0)]:
+                        flag_move = 1
+                        way = event.value[0]
+                    elif event.value == (0, 0):
+                        flag_move = 0
 
-            if event.type == pygame.JOYAXISMOTION and not flag_shield:
-                if event.axis == 2:
-                    if event.value <= -0.97:
+                if event.type == pygame.JOYAXISMOTION and not flag_shield:
+                    if event.axis == 2:
+                        if event.value <= -0.97:
+                            all_sprites.update("shoot")
+                            flag_shoot = 1
+                        if event.value >= 0.97:
+                            all_sprites.update("shoot")
+                            flag_shoot = 2
+
+                if event.type == pygame.JOYBUTTONDOWN:
+                    if event.button == 0:
+                        flag_shield = 1
+
+                if event.type == pygame.JOYBUTTONUP:
+                    if event.button == 0:
+                        flag_shield = 0
+                    if event.button == 2 and score - 300 >= 0:
+                        kill_balls_sound.play()
+                        score -= 300
+                        for i in all_balls:
+                            i.kill()
+                        counter += 1
+                        for j in range(counter):
+                            AnimatedBall(load_image("ball.png", -1), 3, 3, 30 + j, 30 + j, 2)
+                        counter += 1
+                        flag_counter_changed = 1
+            else:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == 32:
+                        flag_shield = 1
+
+                    if event.key == 97:
+                        flag_move = not flag_move
+                        way = -1
+
+                    if event.key == 100:
+                        flag_move = 1
+                        way = 1
+
+                    if event.key == 304 and score - 300 >= 0:
+                        kill_balls_sound.play()
+                        score -= 300
+                        for i in all_balls:
+                            i.kill()
+                        counter += 1
+                        for j in range(counter):
+                            AnimatedBall(load_image("ball.png", -1), 3, 3, 30 + j, 30 + j, 2)
+                        counter += 1
+                        flag_counter_changed = 1
+
+                if event.type == pygame.KEYUP:
+                    if event.key == 97:
+                        flag_move = 0
+
+                    if event.key == 100:
+                        flag_move = 0
+
+                    if event.key == 32:
+                        flag_shield = 0
+
+                if event.type == pygame.MOUSEBUTTONDOWN and not flag_shield:
+
+                    if event.button == 3:
                         all_sprites.update("shoot")
                         flag_shoot = 1
-                    if event.value >= 0.97:
+
+                    if event.button == 1:
                         all_sprites.update("shoot")
                         flag_shoot = 2
 
-            if event.type == pygame.JOYBUTTONDOWN:
-                if event.button == 0:
-                    flag_shield = 1
+        if flag_move:
+            all_sprites.update(way)
+        if flag_shield:
+            all_sprites.update()
+        if flag_shoot == 1:
+            Bullet(xw + 20, y, "r")
+            flag_shoot = 0
+        elif flag_shoot == 2:
+            Bullet(x, y, "l")
+            flag_shoot = 0
 
-            if event.type == pygame.JOYBUTTONUP:
-                if event.button == 0:
-                    flag_shield = 0
-                if event.button == 2 and score - 300 >= 0:
-                    score -= 300
-                    for i in all_balls:
-                        i.kill()
-                    AnimatedBall(load_image("ball.png", -1), 3, 3, 30, 30, 2)
-                    AnimatedBall(load_image("ball.png", -1), 3, 3, 40, 40, 2)
-                    AnimatedBall(load_image("ball.png", -1), 3, 3, 50, 50, 2)
-        else:
-            if event.type == pygame.KEYDOWN:
-                if event.key == 32:
-                    flag_shield = 1
-
-                if event.key == 97:
-                    flag_move = not flag_move
-                    way = -1
-
-                if event.key == 100:
-                    flag_move = 1
-                    way = 1
-
-                if event.key == 304 and score - 300 >= 0:
-                    score -= 300
-                    for i in all_balls:
-                        i.kill()
-                    AnimatedBall(load_image("ball.png", -1), 3, 3, 30, 30, 2)
-                    AnimatedBall(load_image("ball.png", -1), 3, 3, 40, 40, 2)
-                    AnimatedBall(load_image("ball.png", -1), 3, 3, 50, 50, 2)
-
-
-            if event.type == pygame.KEYUP:
-                if event.key == 97:
-                    flag_move = 0
-                    all_sprites.update("shield_up")
-
-                if event.key == 100:
-                    flag_move = 0
-
-                if event.key == 32:
-                    flag_shield = 0
-
-            if event.type == pygame.MOUSEBUTTONDOWN and not flag_shield:
-
-                if event.button == 3:
-                    all_sprites.update("shoot")
-                    flag_shoot = 1
-
-                if event.button == 1:
-                    all_sprites.update("shoot")
-                    flag_shoot = 2
-
-    if flag_move:
-        all_sprites.update(way)
-    if flag_shield:
+        all_back.draw(screen)  # не двигать
+        all_balls.draw(screen)
+        all_balls.update()
+        draw_text(score, counter)
         all_sprites.update()
-    if flag_shoot == 1:
-        Bullet(xw + 20, y, "r")
-        flag_shoot = 0
-    elif flag_shoot == 2:
-        Bullet(x, y, "l")
-        flag_shoot = 0
-    all_back.draw(screen)  # не двигать
-    print(score)
-    all_balls.draw(screen)
-    all_balls.update()
+        all_sprites.draw(screen)
+        all_bullets.draw(screen)
+        all_bullets.update()
 
-    all_sprites.update()
-    all_sprites.draw(screen)
-    all_bullets.draw(screen)
-    all_bullets.update()
-    pygame.display.flip()
-    clock.tick(FPS)
+        pygame.display.flip()
+        clock.tick(FPS)
+    elif flag_dead == 1:
+        running = False
+
+start_screen(end=True)
