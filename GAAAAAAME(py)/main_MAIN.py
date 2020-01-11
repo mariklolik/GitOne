@@ -24,9 +24,18 @@ running = True
 clock = pygame.time.Clock()
 screen.fill((255, 255, 255))
 
-pygame.mixer.music.load(os.path.join('data', 'fight.ogg'))
-pygame.mixer.music.set_volume(0.6)
-pygame.mixer.music.play(-1)
+cur_score = open("score.txt", "r")
+current = cur_score.read()
+cur_score.close()
+
+if int(current) >= 12000:
+    pygame.mixer.music.load(os.path.join('data', 'fight2.mp3'))
+    pygame.mixer.music.set_volume(0.6)
+    pygame.mixer.music.play(-1)
+else:
+    pygame.mixer.music.load(os.path.join('data', 'fight.ogg'))
+    pygame.mixer.music.set_volume(0.8)
+    pygame.mixer.music.play(-1)
 
 shield_sound = pygame.mixer.Sound(os.path.join('data', 'magicshield.ogg'))
 kill_balls_sound = pygame.mixer.Sound(os.path.join('data', 'heal.ogg'))
