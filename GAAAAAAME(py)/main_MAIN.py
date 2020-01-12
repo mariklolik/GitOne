@@ -58,7 +58,7 @@ def draw_text(sc, balls):
     # рисует текст с информацией о счете и количестве шаров, которое призовется после использоваиния способности
 
     text1 = font.render(f"Current score: {sc}", 1, (0, 255, 255))
-    text2 = font.render(f"Next kill will summon: {balls}", 1, (0, 255, 255))
+    text2 = font.render(f"Next kill will summon: {balls + 1}", 1, (0, 255, 255))
     screen.blit(text1, (t_x, t_y1))
     screen.blit(text2, (t_x, t_y2))
 
